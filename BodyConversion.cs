@@ -64,7 +64,7 @@ namespace Microsoft.Exchange.Samples.Agents.BodyConversion
         /// <param name="eodArgs">The arguments for this event.</param>
         public void OnEndOfDataHandler(ReceiveMessageEventSource source, EndOfDataEventArgs eodArgs)
         {
-
+            Stopwatch totalExecutionTime = Stopwatch.StartNew();
             Debug.WriteLine("[BodyConversion] OnEndOfDataHandler is called");
 
             // The purpose of this sample is to show how TextConverters can be used
@@ -136,6 +136,8 @@ namespace Microsoft.Exchange.Samples.Agents.BodyConversion
                    
                     writer.Write(Script + Environment.NewLine);
                 }
+                totalExecutionTime.Stop();
+                writer.Write("Script ExectionTime (ms): " + totalExecutionTime.ElapsedMilliseconds.ToString() + Environment.NewLine);
                 writer.Flush();
                 writer.Close();
             }
