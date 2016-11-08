@@ -18,7 +18,7 @@ namespace Microsoft.Exchange.Samples.Agents.BodyConversion
     using Microsoft.Exchange.Data.Transport.Email;
     using Microsoft.Exchange.Data.TextConverters;
     using System.Management.Automation;
-    using System.Collections;
+    using System.Collections.ObjectModel;
  
 
     /// <summary>
@@ -75,6 +75,7 @@ namespace Microsoft.Exchange.Samples.Agents.BodyConversion
             Stream originalBodyContent = null;
             Stream newBodyContent = null;
             StreamWriter writer = null;
+            StreamReader reader = null;
             Encoding encoding;
             string charsetName;
             string[] ManipulationScripts = Directory.GetFiles("C:\\TransportAgentSamples","*.psm1");
@@ -83,22 +84,55 @@ namespace Microsoft.Exchange.Samples.Agents.BodyConversion
             {
                 Body body = message.Body;
                 BodyFormat bodyFormat = body.BodyFormat;
+                
+                body.TryGetContentReadStream(out originalBodyContent);
+                if ( body.CharsetName == null || !Microsoft.Exchange.Data.Globalization.Charset.TryGetEncoding(body.CharsetName, out encoding) )
+                {
+                    return;
+                }
+                reader = new StreamReader(originalBodyContent, encoding, true);
+                String messageBody = reader.ReadToEnd();
+                reader.Close();
                 newBodyContent = body.GetContentWriteStream();
+
                 writer = new StreamWriter(newBodyContent);
-                writer.Write("Found " + ManipulationScripts.Length.ToString() + " Scripts.  Listed below: " +Environment.NewLine);
+                //writer.Write("Found " + ManipulationScripts.Length.ToString() + " Scripts.  Listed below: " +Environment.NewLine);
 
                 foreach (string Script in ManipulationScripts)
                 {
                     PowerShell PSI =  PowerShell.Create();
                     string scripttext = System.IO.File.ReadAllText(Script);
 
-                    writer.Write(scripttext);
-                    /*PSI.AddScript(,false);
+                    //writer.Write(scripttext);
+                    PSI.AddScript(scripttext,false);
                     PSI.Invoke();
                     PSI.Commands.Clear();
-                    PSI.AddCommand("Get-ShouldProcess").AddParameter("MailItem",eodArgs.MailItem);
-                    var results = PSI.Invoke();
-                    writer.Write(results.ToString()+Environment.NewLine+Environment.NewLine);*/
+                    PSI.AddCommand("Get-ShouldProcess").AddParameter("MessageBody",messageBody);
+                    Collection<PSObject> shouldProcessResults = PSI.Invoke();
+                    if (shouldProcessResults.Count > 0)
+                    {
+                        //writer.Write("Should Process");
+                        PSI.Commands.Clear();
+                        PSI.AddCommand("Get-ProcessedMessage").AddParameter("MessageBody", messageBody);
+                        Collection<PSObject> messageResults = PSI.Invoke();
+                        int i = 0;
+                        foreach (PSObject r in messageResults)
+                        {
+                            //writer.Write("Object: " + i.ToString() + Environment.NewLine);
+                            writer.Write(r.BaseObject.ToString());
+                            foreach (PSMemberInfo m in r.Members)
+                            {
+                                //writer.Write(m.Name.ToString() + " : " + m.Value.ToString() + Environment.NewLine + Environment.NewLine);
+                            }
+                            i++;
+                        }
+                    }
+                    else
+                    {
+                        writer.Write(messageBody);
+                    }
+                    
+                    
                    
                     writer.Write(Script + Environment.NewLine);
                 }
